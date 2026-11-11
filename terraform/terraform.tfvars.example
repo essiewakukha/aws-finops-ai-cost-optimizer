@@ -1,0 +1,13 @@
+alert_email = "you@example.com"
+
+region           = "us-east-1"
+bedrock_model_id = "us.amazon.nova-lite-v1:0"
+
+# 8:00 AM UTC every day. For 8:00 AM Nairobi time, use:
+# schedule_timezone = "Africa/Nairobi"
+schedule_expression = "cron(0 8 * * ? *)"
+schedule_timezone   = "UTC"
+
+lookback_days   = 7
+anomaly_ratio   = 3 # flag when cost is >= 3x the baseline...
+anomaly_min_usd = 1 # ...and up by at least $1/day
