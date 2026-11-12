@@ -23,13 +23,12 @@
 9. [Deploy it](#deploy-it)
 10. [Test it](#test-it)
 11. [Configuration](#configuration)
-12. [Screenshots](#screenshots)
-13. [Running cost](#running-cost)
-14. [Key learnings](#key-learnings)
-15. [Troubleshooting](#troubleshooting)
-16. [Next steps](#next-steps)
-17. [Clean up](#clean-up)
-18. [Skills demonstrated](#skills-demonstrated)
+12. [Running cost](#running-cost)
+13. [Key learnings](#key-learnings)
+14. [Troubleshooting](#troubleshooting)
+15. [Next steps](#next-steps)
+16. [Clean up](#clean-up)
+17. [Skills demonstrated](#skills-demonstrated)
 
 ---
 
@@ -429,31 +428,6 @@ Set these in `terraform/terraform.tfvars`:
 
 ---
 
-## Screenshots
-
-> Account IDs are blurred.
-
-| Live report email | Fallback recommendations |
-|---|---|
-| ![](docs/screenshots/01-email-report.png) | ![](docs/screenshots/02-email-fallback.png) |
-
-| EventBridge Scheduler | Lambda function (180 s timeout, arm64) |
-|---|---|
-| ![](docs/screenshots/03-scheduler.png) | ![](docs/screenshots/04-lambda.png) |
-
-| CloudWatch logs | Least-privilege IAM policy |
-|---|---|
-| ![](docs/screenshots/05-cloudwatch-logs.png) | ![](docs/screenshots/06-iam-policy.png) |
-
-| Bedrock "Too many tokens per day" (CLI) | Bedrock quota (Service Quotas) |
-|---|---|
-| ![](docs/screenshots/07-bedrock-throttling.png) | ![](docs/screenshots/08-bedrock-quota.png) |
-
-| Cost Explorer (DR project spend, 7 Nov) | Unit tests passing |
-|---|---|
-| ![](docs/screenshots/09-cost-explorer.png) | ![](docs/screenshots/10-pytest.png) |
-
----
 
 ## Running cost
 
