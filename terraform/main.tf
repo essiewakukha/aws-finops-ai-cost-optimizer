@@ -99,7 +99,7 @@ resource "aws_lambda_function" "report" {
   handler          = "handler.lambda_handler"
   filename         = data.archive_file.lambda.output_path
   source_code_hash = data.archive_file.lambda.output_base64sha256
-  timeout          = 60
+  timeout          = 180
   memory_size      = 256
   architectures    = ["arm64"] # Graviton: ~20% cheaper per GB-second
 

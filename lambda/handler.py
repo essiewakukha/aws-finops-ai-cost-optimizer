@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 import boto3
 
+from botocore.config import Config
 from cost_analysis import detect_anomalies, format_facts, parse_cost_explorer, summarize
 
 log = logging.getLogger()
@@ -133,7 +134,11 @@ def run(ce, bedrock, sns, now: datetime | None = None) -> dict:
 def lambda_handler(event, context):
     result = run(
         ce=boto3.client("ce", region_name="us-east-1"),  # Cost Explorer's endpoint is in us-east-1
-        bedrock=boto3.client("bedrock-runtime"),
+                # Retry ThrottlingException with exponential back-off (low quotas on new accounts)
+        bedrock=boto3.client(
+            "bedrock-runtime",
+            config=Config(retries={"max_attempts": 8, "mode": "adaptive"}, read_timeout=45),
+        ),
         sns=boto3.client("sns"),
     )
     result.pop("body")
