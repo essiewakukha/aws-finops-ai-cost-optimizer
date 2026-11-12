@@ -12,9 +12,41 @@ locals {
 # ---------------------------------------------------------------------------
 # SNS: email delivery
 # ---------------------------------------------------------------------------
+# A customer-managed key is required: the AWS-managed alias/aws/sns key policy
+# can't be edited, and it doesn't let CloudWatch alarms publish to the topic.
+resource "aws_kms_key" "sns" {
+  description             = "Encrypts the ${var.project} SNS topic"
+  enable_key_rotation     = true
+  deletion_window_in_days = 7
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AccountAdmin"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:${data.aws_partition.current.partition}:iam::${local.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "CloudWatchAlarmsPublish"
+        Effect    = "Allow"
+        Principal = { Service = "cloudwatch.amazonaws.com" }
+        Action    = ["kms:Decrypt", "kms:GenerateDataKey*"]
+        Resource  = "*"
+      },
+    ]
+  })
+}
+
+resource "aws_kms_alias" "sns" {
+  name          = "alias/${var.project}-sns"
+  target_key_id = aws_kms_key.sns.key_id
+}
+
 resource "aws_sns_topic" "report" {
   name              = "${var.project}-report"
-  kms_master_key_id = "alias/aws/sns"
+  kms_master_key_id = aws_kms_key.sns.arn
 }
 
 resource "aws_sns_topic_subscription" "email" {
@@ -68,6 +100,12 @@ resource "aws_iam_role_policy" "lambda" {
         Resource = aws_sns_topic.report.arn
       },
       {
+        Sid      = "EncryptForTopic"
+        Effect   = "Allow"
+        Action   = ["kms:GenerateDataKey*", "kms:Decrypt"]
+        Resource = aws_kms_key.sns.arn
+      },
+      {
         Sid      = "WriteOwnLogs"
         Effect   = "Allow"
         Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
@@ -99,7 +137,7 @@ resource "aws_lambda_function" "report" {
   handler          = "handler.lambda_handler"
   filename         = data.archive_file.lambda.output_path
   source_code_hash = data.archive_file.lambda.output_base64sha256
-  timeout          = 180
+  timeout          = 300
   memory_size      = 256
   architectures    = ["arm64"] # Graviton: ~20% cheaper per GB-second
 

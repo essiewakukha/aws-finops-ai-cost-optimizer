@@ -11,9 +11,16 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import boto3
-
 from botocore.config import Config
-from cost_analysis import detect_anomalies, format_facts, parse_cost_explorer, summarize
+
+from cost_analysis import (
+    detect_anomalies,
+    format_facts,
+    format_fallback,
+    parse_cost_explorer,
+    parse_other_charges,
+    summarize,
+)
 
 log = logging.getLogger()
 log.setLevel(logging.INFO)
@@ -65,7 +72,8 @@ def get_costs(ce, start: str, end: str) -> list[dict]:
             "TimePeriod": {"Start": start, "End": end},
             "Granularity": "DAILY",
             "Metrics": ["UnblendedCost"],
-            "GroupBy": [{"Type": "DIMENSION", "Key": "SERVICE"}],
+            # RECORD_TYPE separates usage from tax, credits and monthly fees.
+            "GroupBy": [{"Type": "DIMENSION", "Key": "SERVICE"}, {"Type": "DIMENSION", "Key": "RECORD_TYPE"}],
         }
         if token:
             kwargs["NextPageToken"] = token
@@ -94,17 +102,20 @@ def run(ce, bedrock, sns, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     start, end = _date_range(now, LOOKBACK_DAYS)
 
-    daily = parse_cost_explorer(get_costs(ce, start, end))
-    summary = summarize(daily)
+    raw = get_costs(ce, start, end)
+    daily = parse_cost_explorer(raw)
+    summary = summarize(daily, other_charges=parse_other_charges(raw))
     anomalies = detect_anomalies(daily, RATIO_THRESHOLD, MIN_INCREASE)
     facts = {"summary": summary, "anomalies": anomalies}
     log.info("Facts: %s", json.dumps(facts))
 
+    section = "AI ANALYSIS (Amazon Bedrock)"
     try:
         analysis = ai_report(bedrock, facts)
     except Exception as exc:  # the email must still go out
         log.exception("Bedrock call failed")
-        analysis = f"(AI analysis unavailable: {exc.__class__.__name__}. The figures above are still exact.)"
+        section = "ANALYSIS (rule-based fallback)"
+        analysis = format_fallback(summary, anomalies, exc.__class__.__name__)
 
     body = "\n".join(
         [
@@ -113,7 +124,7 @@ def run(ce, bedrock, sns, now: datetime | None = None) -> dict:
             format_facts(summary, anomalies),
             "",
             "=" * 60,
-            "AI ANALYSIS (Amazon Bedrock)",
+            section,
             "=" * 60,
             analysis,
             "",
@@ -134,10 +145,12 @@ def run(ce, bedrock, sns, now: datetime | None = None) -> dict:
 def lambda_handler(event, context):
     result = run(
         ce=boto3.client("ce", region_name="us-east-1"),  # Cost Explorer's endpoint is in us-east-1
-                # Retry ThrottlingException with exponential back-off (low quotas on new accounts)
+        # Retry ThrottlingException with back-off (low quotas on new accounts). Worst case is
+        # 5 x 30 s reads plus back-off, which stays inside the 300 s Lambda timeout so the
+        # fallback email still goes out.
         bedrock=boto3.client(
             "bedrock-runtime",
-            config=Config(retries={"max_attempts": 8, "mode": "adaptive"}, read_timeout=45),
+            config=Config(retries={"max_attempts": 5, "mode": "adaptive"}, connect_timeout=5, read_timeout=30),
         ),
         sns=boto3.client("sns"),
     )
