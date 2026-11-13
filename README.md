@@ -6,7 +6,7 @@
 >
 > **Deployed and running on a real AWS account.** This README covers the live results, including a production Bedrock quota issue and how the design handled it.
 
-![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC) ![Python](https://img.shields.io/badge/Python-3.11-3776AB) ![Lambda](https://img.shields.io/badge/AWS-Lambda-FF9900) ![Bedrock](https://img.shields.io/badge/AI-Amazon%20Bedrock-01A88D) ![Tests](https://img.shields.io/badge/tests-12%20passing-2E7D32) ![Cost](https://img.shields.io/badge/running%20cost-~%240.50%2Fmonth-2E7D32)
+![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC) ![Python](https://img.shields.io/badge/Python-3.11-3776AB) ![Lambda](https://img.shields.io/badge/AWS-Lambda-FF9900) ![Bedrock](https://img.shields.io/badge/AI-Amazon%20Bedrock-01A88D) ![Tests](https://img.shields.io/badge/tests-16%20passing-2E7D32) ![Cost](https://img.shields.io/badge/running%20cost-~%241.50%2Fmonth-2E7D32)
 
 ---
 
@@ -156,7 +156,7 @@ Anomalies detected: 0
 | Anomaly noise filter ($1/day floor) | ✅ No false positives on cent-level changes |
 | Graceful degradation when Bedrock fails | ✅ **Proven in production**: 2 of 2 reports delivered during a Bedrock outage |
 | Bedrock AI analysis | ⏳ Blocked by the account's daily token quota (see below). Support case opened |
-| Unit tests | ✅ 12 / 12 passing |
+| Unit tests | ✅ 16 / 16 passing |
 | Tool's own cost | $0.03 so far (Cost Explorer API) |
 
 ---
@@ -310,7 +310,7 @@ aws-finops-ai-cost-optimizer/
 │   ├── handler.py                  # Cost Explorer -> Bedrock (with retries) -> SNS
 │   └── cost_analysis.py            # maths, anomaly detection, rule-based fallback
 ├── tests/
-│   └── test_cost_analysis.py       # 12 tests incl. EKS spike, Bedrock failure, fallback
+│   └── test_cost_analysis.py       # 16 tests incl. EKS spike, Bedrock failure, fallback, monthly fees
 ├── scripts/
 │   ├── invoke.sh                   # run the report now
 │   └── preview_local.py            # preview the email with sample data, no AWS
@@ -374,19 +374,23 @@ python3 -m pytest -v
 ```
 
 ```
-test_parse_skips_zero_cost_services                PASSED
-test_summary_totals_and_percentages                PASSED
-test_detects_eks_spike                             PASSED
-test_detects_new_spend_from_forgotten_resource     PASSED
-test_ignores_small_noise                           PASSED
-test_flat_spend_has_no_anomalies                   PASSED
-test_empty_account                                 PASSED
-test_handler_end_to_end                            PASSED
-test_email_still_sent_when_bedrock_fails           PASSED
-test_rule_based_recommendations_prioritise_anomalies PASSED
-test_rule_based_recommendations_for_real_week      PASSED
-test_unknown_service_gets_default_tip              PASSED
-========================= 12 passed =========================
+test_parse_skips_zero_cost_services                      PASSED
+test_summary_totals_and_percentages                      PASSED
+test_detects_eks_spike                                   PASSED
+test_detects_new_spend_from_forgotten_resource           PASSED
+test_ignores_small_noise                                 PASSED
+test_flat_spend_has_no_anomalies                         PASSED
+test_empty_account                                       PASSED
+test_handler_end_to_end                                  PASSED
+test_email_still_sent_when_bedrock_fails                 PASSED
+test_monthly_fees_and_tax_are_not_anomalies              PASSED
+test_lump_sum_services_ignored_even_if_reported_as_usage PASSED
+test_credits_are_reported_not_dropped                    PASSED
+test_rule_based_recommendations_prioritise_anomalies     PASSED
+test_rule_based_recommendations_for_real_week            PASSED
+test_rule_based_recommendations_empty_account            PASSED
+test_unknown_service_gets_default_tip                    PASSED
+========================= 16 passed =========================
 ```
 
 ### Preview the email locally
@@ -441,9 +445,10 @@ Set these in `terraform/terraform.tfvars`:
 | EventBridge Scheduler | 30 invocations | ~$0 (free tier) |
 | SNS email | 30 emails | ~$0 (free tier) |
 | CloudWatch Logs + 1 alarm | small | ~$0.10 |
-| **Total** | | **≈ $0.50 / month** |
+| KMS customer-managed key (SNS encryption) | 1 key | **$1.00**. Needed so the CloudWatch alarm can publish to the encrypted topic |
+| **Total** | | **≈ $1.50 / month** |
 
-Catching a single forgotten EKS cluster (~$513/month in the sample) would pay for this tool for about **85 years**.
+Catching a single forgotten EKS cluster (~$513/month in the sample) would pay for this tool for about **28 years**.
 
 ---
 
